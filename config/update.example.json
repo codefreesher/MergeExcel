@@ -1,0 +1,12 @@
+{
+  "version": "1.1.0",
+  "mandatory": false,
+  "download_url": "https://mydomain.com/downloads/ExcelMergerPro-Setup-1.1.0.exe",
+  "sha256": "REPLACE_WITH_64_CHARACTER_SHA256_HEX_DIGEST",
+  "release_notes": [
+    "Tối ưu xử lý file Excel lớn",
+    "Cải thiện thao tác kéo và thả",
+    "Sửa lỗi và cải thiện độ ổn định"
+  ]
+}
+

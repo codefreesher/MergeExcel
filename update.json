@@ -1,0 +1,9 @@
+{
+  "version": "1.0.0",
+  "mandatory": false,
+  "download_url": "https://github.com/codefreesher/MergeExcel/releases/download/v1.0.0/ExcelMergerPro-Setup-1.0.0.exe",
+  "sha256": "REPLACE_AFTER_PUBLISHING_THE_INSTALLER",
+  "release_notes": [
+    "Phát hành phiên bản đầu tiên của Excel Merger Pro"
+  ]
+}
