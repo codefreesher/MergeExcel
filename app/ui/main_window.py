@@ -36,16 +36,18 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{APP_NAME} {VERSION}"); self.resize(1280, 800); self.setMinimumSize(1050, 680)
         root = QWidget(objectName="content"); self.setCentralWidget(root); main = QHBoxLayout(root); main.setContentsMargins(0, 0, 0, 0); main.setSpacing(0)
         sidebar = QFrame(objectName="sidebar"); sidebar.setFixedWidth(222); side = QVBoxLayout(sidebar); side.setContentsMargins(14, 20, 14, 18); side.setSpacing(7)
-        brand_row = QHBoxLayout(); logo = QLabel("X"); logo.setFixedSize(32, 32); logo.setStyleSheet("font-size:18px;font-weight:800;color:white;background:#246bfd;border-radius:7px"); logo.setAlignment(Qt.AlignmentFlag.AlignCenter); brand_row.addWidget(logo); brand_row.addWidget(QLabel(APP_NAME, objectName="brand")); side.addLayout(brand_row); side.addSpacing(22)
+        icon_dir = Path(__file__).parent.parent / "resources" / "icons"
+        self.setWindowIcon(QIcon(str(icon_dir / "app-logo.svg")))
+        brand_row = QHBoxLayout(); logo = QLabel(); logo.setPixmap(QIcon(str(icon_dir / "app-logo.svg")).pixmap(34, 34)); logo.setFixedSize(36, 36); logo.setAlignment(Qt.AlignmentFlag.AlignCenter); brand_row.addWidget(logo); brand_row.addWidget(QLabel(APP_NAME, objectName="brand")); side.addLayout(brand_row); side.addSpacing(22)
         self.stack = QStackedWidget(); self.merge_page = MergePage(self.settings); self.history_page = HistoryPage(self.history); self.settings_page = SettingsPage(self.settings); self.about_page = AboutPage()
         for page in (self.merge_page, self.history_page, self.settings_page, self.about_page): self.stack.addWidget(page)
         names = [("Ghép Excel", "spreadsheet.svg"), ("Lịch sử", "history.svg"), ("Cài đặt", "settings.svg"), ("Giới thiệu", "info.svg")]
-        group = QButtonGroup(self); group.setExclusive(True); icon_dir = Path(__file__).parent.parent / "resources" / "icons"
+        group = QButtonGroup(self); group.setExclusive(True)
         for index, (name, icon) in enumerate(names):
             button = QPushButton(QIcon(str(icon_dir / icon)), name, objectName="nav"); button.setCheckable(True); button.clicked.connect(lambda _=False, i=index: self.show_page(i)); group.addButton(button); side.addWidget(button)
             if index == 0: button.setChecked(True)
-        side.addStretch(); side.addWidget(QLabel(f"{APP_NAME}\nPhiên bản {VERSION}"))
-        self.update_status = QLabel("Đang chờ kiểm tra cập nhật"); self.update_status.setWordWrap(True); self.update_status.setStyleSheet("color:#68758a;font-size:11px"); side.addWidget(self.update_status)
+        side.addStretch(); side.addWidget(QLabel(f"V{VERSION}"))
+        self.update_status = QLabel(""); self.update_status.setWordWrap(True); self.update_status.setStyleSheet("color:#68758a;font-size:11px"); side.addWidget(self.update_status)
         main.addWidget(sidebar); main.addWidget(self.stack, 1); self.toast = Toast(root)
         self.merge_page.toast_requested.connect(self.toast.show_message); self.merge_page.merge_completed.connect(self.merge_finished)
         self.settings_page.check_update_requested.connect(lambda: self.check_updates(True)); self.about_page.check_update_requested.connect(lambda: self.check_updates(True)); self.settings_page.history_clear_requested.connect(self.clear_history)
@@ -65,16 +67,16 @@ class MainWindow(QMainWindow):
 
     def check_updates(self, interactive: bool = False) -> None:
         if self.update_thread and self.update_thread.isRunning(): return
-        self.update_status.setText("Đang kiểm tra cập nhật..."); self.update_thread = UpdateCheckThread(self.updater)
+        self.update_status.clear(); self.update_thread = UpdateCheckThread(self.updater)
         self.update_thread.found.connect(self.update_found); self.update_thread.current.connect(lambda: self.update_current(interactive)); self.update_thread.failed.connect(lambda message: self.update_failed(message, interactive)); self.update_thread.finished.connect(self.update_thread.deleteLater); self.update_thread.start()
 
     def update_found(self, info) -> None:
         self.update_status.setText(f"Có phiên bản mới {info.version}"); self.settings_page.version_label.setText(f"Phiên bản hiện tại: {VERSION}\nPhiên bản mới nhất: {info.version}"); self.toast.show_message(f"Có phiên bản mới {info.version}"); UpdateDialog(self.updater, info, self.settings, self).exec()
 
     def update_current(self, interactive: bool) -> None:
-        self.update_status.setText("Ứng dụng đã là phiên bản mới nhất"); self.settings_page.version_label.setText(f"Phiên bản hiện tại: {VERSION}\nPhiên bản mới nhất: {VERSION}")
+        self.update_status.clear(); self.settings_page.version_label.setText(f"Phiên bản hiện tại: {VERSION}\nPhiên bản mới nhất: {VERSION}")
         if interactive: QMessageBox.information(self, "Cập nhật", "Ứng dụng đã là phiên bản mới nhất.")
 
     def update_failed(self, message: str, interactive: bool) -> None:
-        self.update_status.setText("Không thể kiểm tra cập nhật"); logging.getLogger(__name__).warning(message)
+        self.update_status.clear(); logging.getLogger(__name__).warning(message)
         if interactive: QMessageBox.warning(self, "Kiểm tra cập nhật", message)

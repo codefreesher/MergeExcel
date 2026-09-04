@@ -20,9 +20,15 @@ from app.workers.merge_worker import MergeWorker
 def card(title: str) -> tuple[QFrame, QVBoxLayout]:
     frame = QFrame(objectName="card")
     layout = QVBoxLayout(frame)
-    layout.setContentsMargins(18, 15, 18, 17)
-    label = QLabel(title, objectName="sectionTitle")
-    layout.addWidget(label)
+    layout.setContentsMargins(16, 13, 16, 15)
+    layout.setSpacing(10)
+    header = QHBoxLayout()
+    number, _, caption = title.partition(".")
+    badge = QLabel(number.strip(), objectName="stepBadge")
+    badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    label = QLabel(caption.strip() or title, objectName="sectionTitle")
+    header.addWidget(badge); header.addWidget(label); header.addStretch()
+    layout.addLayout(header)
     return frame, layout
 
 
@@ -40,10 +46,11 @@ class MergePage(QWidget):
         outer.setContentsMargins(28, 22, 28, 22)
         outer.addWidget(QLabel("GHÉP CÁC FILE EXCEL THÀNH 1 FILE", objectName="pageTitle"))
         scroll = QScrollArea(widgetResizable=True)
-        container = QWidget()
+        container = QWidget(objectName="scrollBody")
         self.body = QVBoxLayout(container)
         self.body.setContentsMargins(0, 10, 8, 10)
-        self.body.setSpacing(14)
+        self.body.setSpacing(12)
+        self.body.setAlignment(Qt.AlignmentFlag.AlignTop)
         scroll.setWidget(container)
         outer.addWidget(scroll)
 
@@ -59,6 +66,10 @@ class MergePage(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(1, self.table.horizontalHeader().ResizeMode.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(3, self.table.horizontalHeader().ResizeMode.Stretch)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setAlternatingRowColors(True)
+        self.table.setMinimumHeight(150)
+        self.table.setMaximumHeight(245)
+        self.table.verticalHeader().setDefaultSectionSize(34)
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self.context_menu)
         self.table.itemChanged.connect(self._item_changed)
