@@ -35,7 +35,7 @@ python -m pytest tests
 
 ## Build EXE và installer
 
-1. Cài Python và [Inno Setup 6](https://jrsoftware.org/isinfo.php), thêm `ISCC.exe` vào `PATH`.
+1. Cài Python và [Inno Setup 6](https://jrsoftware.org/isinfo.php), thêm `ISCC.exe` vào `PATH`. Bản phát hành dùng Nuitka để biên dịch Python thành native binary, khó dịch ngược hơn bundle PyInstaller thông thường.
 2. Đồng bộ `VERSION` trong `app/config.py`, `APP_VERSION` trong `build.bat`, rồi chạy:
 
 ```bat
@@ -48,6 +48,8 @@ Kết quả:
 - `installer-output\ExcelMergerPro-Setup-1.0.0.exe`
 
 Installer cài theo user vào `%LOCALAPPDATA%\Programs\Excel Merger Pro`, không yêu cầu quyền Administrator. Cùng `AppId` giúp phiên bản mới nâng cấp đè lên bản cũ; dữ liệu trong `%LOCALAPPDATA%\ExcelMergerPro` không bị gỡ hoặc ghi đè.
+
+Nuitka làm tăng đáng kể chi phí phân tích ngược nhưng không có giải pháp nào bảo vệ tuyệt đối mã chạy trên máy khách. Không đặt private key, token GitHub hoặc bí mật server trong source/binary; các bí mật phải nằm ở server hoặc GitHub Actions Secrets.
 
 ## Phát hành cập nhật
 

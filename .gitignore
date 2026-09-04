@@ -5,4 +5,8 @@ __pycache__/
 build/
 dist/
 installer-output/
-
+dist-nuitka/
+nuitka-crash-report.xml
+*.build/
+*.dist/
+*.onefile-build/

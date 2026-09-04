@@ -27,17 +27,29 @@ jobs:
       - name: Run tests
         run: python -m pytest tests
 
-      - name: Build application
-        run: python -m PyInstaller --clean --noconfirm ExcelMergerPro.spec
-
-      - name: Install Inno Setup
-        run: choco install innosetup --no-progress -y
-
       - name: Resolve version
         shell: pwsh
         run: |
           $version = "${{ github.ref_name }}" -replace '^v', ''
           "APP_VERSION=$version" >> $env:GITHUB_ENV
+          $config = Get-Content app\config.py -Raw
+          $config = $config -replace 'VERSION = "[^"]+"', "VERSION = `"$version`""
+          Set-Content app\config.py $config -Encoding utf8
+
+      - name: Compile protected application with Nuitka
+        run: >-
+          python -m nuitka
+          --mode=onefile
+          --enable-plugin=pyside6
+          --windows-console-mode=disable
+          --assume-yes-for-downloads
+          --include-data-dir=app/resources=app/resources
+          --output-dir=dist
+          --output-filename=ExcelMergerPro.exe
+          main.py
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
 
       - name: Build installer
         shell: pwsh
@@ -56,4 +68,3 @@ jobs:
           files: |
             installer-output/ExcelMergerPro-Setup-${{ env.APP_VERSION }}.exe
             installer-output/ExcelMergerPro-Setup-${{ env.APP_VERSION }}.exe.sha256
-
