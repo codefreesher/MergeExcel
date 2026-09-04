@@ -53,10 +53,10 @@ Nuitka làm tăng đáng kể chi phí phân tích ngược nhưng không có gi
 
 ## Phát hành cập nhật
 
-1. Manifest hiện được đọc từ `https://raw.githubusercontent.com/codefreesher/MergeExcel/main/update.json`.
-2. Build installer, tính SHA-256 bằng `certutil -hashfile <installer> SHA256`.
-3. Cập nhật [update.json](update.json) trên nhánh `main` với version, URL Release và SHA-256 mới.
-4. Upload installer đúng URL và kiểm tra version manifest lớn hơn version ứng dụng.
+1. Ứng dụng đọc release mới nhất trực tiếp từ GitHub Releases API của `codefreesher/MergeExcel`.
+2. Workflow tự build installer, tạo SHA-256 và upload cả hai asset khi push tag `v*`.
+3. Updater tự tìm asset `ExcelMergerPro-Setup-x.x.x.exe`, đọc version từ tag và xác minh digest trước khi chạy.
+4. Muốn bắt buộc cập nhật, thêm dòng `[mandatory]` vào nội dung GitHub Release.
 
 Ứng dụng từ chối chạy installer nếu thiếu SHA-256, digest sai hoặc download lỗi. `mandatory: true` sẽ ẩn nút “Để sau”. Nên ký code-signing cho cả EXE và installer trước khi phát hành.
 
@@ -69,7 +69,7 @@ git tag v1.0.0
 git push origin v1.0.0
 ```
 
-Sau khi workflow hoàn tất, lấy digest từ asset `.sha256`, điền vào `update.json` rồi push lại nhánh `main`.
+Sau khi workflow hoàn tất, ứng dụng tự nhận release và installer mới; không cần sửa `update.json` thủ công.
 
 ## Giới hạn định dạng Excel
 

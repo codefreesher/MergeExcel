@@ -7,7 +7,7 @@ from pathlib import Path
 APP_NAME = "Excel Merger Pro"
 APP_ID = "ExcelMergerPro"
 VERSION = "1.2.2"
-UPDATE_URL = "https://raw.githubusercontent.com/codefreesher/MergeExcel/main/update.json"
+UPDATE_URL = "https://api.github.com/repos/codefreesher/MergeExcel/releases/latest"
 SUPPORTED_EXTENSIONS = {".xlsx", ".xlsm"}
 EXCEL_MAX_SHEET_NAME = 31
 

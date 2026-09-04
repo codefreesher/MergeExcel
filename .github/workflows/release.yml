@@ -4,6 +4,14 @@ on:
   push:
     tags:
       - "v*"
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version cần build, ví dụ 1.2.2"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -30,7 +38,15 @@ jobs:
       - name: Resolve version
         shell: pwsh
         run: |
-          $version = "${{ github.ref_name }}" -replace '^v', ''
+          if ("${{ github.event_name }}" -eq "release") {
+            $tag = "${{ github.event.release.tag_name }}"
+          } elseif ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $tag = "v${{ inputs.version }}"
+          } else {
+            $tag = "${{ github.ref_name }}"
+          }
+          $version = $tag -replace '^v', ''
+          "RELEASE_TAG=$tag" >> $env:GITHUB_ENV
           "APP_VERSION=$version" >> $env:GITHUB_ENV
           $config = Get-Content app\config.py -Raw
           $config = $config -replace 'VERSION = "[^"]+"', "VERSION = `"$version`""
@@ -64,6 +80,7 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
           generate_release_notes: true
           files: |
             installer-output/ExcelMergerPro-Setup-${{ env.APP_VERSION }}.exe

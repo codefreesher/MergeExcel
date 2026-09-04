@@ -66,9 +66,24 @@ class MainWindow(QMainWindow):
             self.history.clear(); self.history_page.refresh()
 
     def check_updates(self, interactive: bool = False) -> None:
-        if self.update_thread and self.update_thread.isRunning(): return
+        # QThread dùng deleteLater; luôn xóa tham chiếu Python khi thread kết thúc
+        # để lần kiểm tra tiếp theo không truy cập C++ object đã bị hủy.
+        if self.update_thread is not None:
+            try:
+                if self.update_thread.isRunning():
+                    return
+            except RuntimeError:
+                self.update_thread = None
         self.update_status.clear(); self.update_thread = UpdateCheckThread(self.updater)
-        self.update_thread.found.connect(self.update_found); self.update_thread.current.connect(lambda: self.update_current(interactive)); self.update_thread.failed.connect(lambda message: self.update_failed(message, interactive)); self.update_thread.finished.connect(self.update_thread.deleteLater); self.update_thread.start()
+        self.update_thread.found.connect(self.update_found)
+        self.update_thread.current.connect(lambda: self.update_current(interactive))
+        self.update_thread.failed.connect(lambda message: self.update_failed(message, interactive))
+        self.update_thread.finished.connect(self._update_check_finished)
+        self.update_thread.finished.connect(self.update_thread.deleteLater)
+        self.update_thread.start()
+
+    def _update_check_finished(self) -> None:
+        self.update_thread = None
 
     def update_found(self, info) -> None:
         self.update_status.setText(f"Có phiên bản mới {info.version}"); self.settings_page.version_label.setText(f"Phiên bản hiện tại: {VERSION}\nPhiên bản mới nhất: {info.version}"); self.toast.show_message(f"Có phiên bản mới {info.version}"); UpdateDialog(self.updater, info, self.settings, self).exec()
