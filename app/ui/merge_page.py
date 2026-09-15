@@ -7,7 +7,7 @@ from PySide6.QtGui import QAction, QDesktopServices, QKeySequence, QShortcut
 from PySide6.QtCore import QUrl
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QFileDialog, QFrame,
     QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMenu, QMessageBox, QProgressBar,
-    QPushButton, QScrollArea, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
+    QPushButton, QScrollArea, QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from app.config import default_output_dir
 from app.core.excel_merger import unique_sheet_name, validate_sheet_name
@@ -44,7 +44,7 @@ class MergePage(QWidget):
         self._worker: MergeWorker | None = None
         outer = QVBoxLayout(self)
         outer.setContentsMargins(28, 22, 28, 22)
-        outer.addWidget(QLabel("GHÉP CÁC FILE EXCEL THÀNH 1 FILE", objectName="pageTitle"))
+        outer.addWidget(QLabel("GOM DỮ LIỆU EXCEL VÀO 1 SHEET", objectName="pageTitle"))
         scroll = QScrollArea(widgetResizable=True)
         container = QWidget(objectName="scrollBody")
         self.body = QVBoxLayout(container)
@@ -93,12 +93,21 @@ class MergePage(QWidget):
         grid.addWidget(QLabel("Tên file output"), 0, 0)
         self.output_name = QLineEdit("Tong_hop.xlsx")
         grid.addWidget(self.output_name, 0, 1, 1, 2)
-        grid.addWidget(QLabel("Thư mục lưu"), 1, 0)
+        grid.addWidget(QLabel("Tên sheet tổng hợp"), 1, 0)
+        self.target_sheet_name = QLineEdit("Tong_hop")
+        grid.addWidget(self.target_sheet_name, 1, 1, 1, 2)
+        grid.addWidget(QLabel("Dữ liệu từ sheet thứ 2 bắt đầu ở dòng"), 2, 0)
+        self.data_start_row = QSpinBox()
+        self.data_start_row.setRange(1, 1_048_576)
+        self.data_start_row.setValue(5)
+        self.data_start_row.setToolTip("Dòng 1-4 chỉ lấy từ sheet đầu; các sheet sau nối dữ liệu từ dòng 5")
+        grid.addWidget(self.data_start_row, 2, 1, 1, 2)
+        grid.addWidget(QLabel("Thư mục lưu"), 3, 0)
         self.output_dir = QLineEdit(self.settings.get("last_output_dir", str(default_output_dir())))
-        grid.addWidget(self.output_dir, 1, 1)
+        grid.addWidget(self.output_dir, 3, 1)
         choose = QPushButton("Chọn thư mục")
         choose.clicked.connect(self.choose_output)
-        grid.addWidget(choose, 1, 2)
+        grid.addWidget(choose, 3, 2)
         output_layout.addLayout(grid)
         self.body.addWidget(output_card)
 
@@ -254,17 +263,17 @@ class MergePage(QWidget):
 
     def start_merge(self) -> None:
         selected = [item for item in self.items if item.selected]
-        errors = [(item.output_name, validate_sheet_name(item.output_name)) for item in selected]
-        errors = [f"{name}: {error}" for name, error in errors if error]
-        if errors:
-            QMessageBox.warning(self, "Tên sheet không hợp lệ", "\n".join(errors[:5])); return
+        target_sheet_name = self.target_sheet_name.text().strip() or "Tong_hop"
+        error = validate_sheet_name(target_sheet_name)
+        if error:
+            QMessageBox.warning(self, "Tên sheet không hợp lệ", error); return
         name = self.output_name.text().strip() or "Tong_hop.xlsx"
         if not name.lower().endswith(".xlsx"): name += ".xlsx"
         output = Path(self.output_dir.text().strip()) / name
         options = MergeOptions(self.options["preserve_format"].isChecked(), self.options["preserve_formula"].isChecked(),
             self.options["values_only"].isChecked(), self.options["skip_empty"].isChecked(),
             self.options["trim_rows"].isChecked(), self.options["auto_duplicates"].isChecked(),
-            self.options["open_after"].isChecked())
+            self.options["open_after"].isChecked(), True, self.data_start_row.value(), target_sheet_name)
         self._thread = QThread(self)
         self._worker = MergeWorker(list(selected), output, options)
         self._worker.moveToThread(self._thread)

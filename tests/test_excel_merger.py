@@ -34,3 +34,24 @@ def test_name_validation_and_uniqueness() -> None:
     assert validate_sheet_name("bad/name") is not None
     assert validate_sheet_name("Valid") is None
     assert unique_sheet_name("Data", {"data"}) == "Data_2"
+
+
+def test_combines_data_into_one_sheet_and_skips_repeated_headers(tmp_path: Path) -> None:
+    first, second, output = tmp_path / "a.xlsx", tmp_path / "b.xlsx", tmp_path / "out.xlsx"
+    for path, values in ((first, ("A1", "A5", "A6")), (second, ("B1", "B5", "B6"))):
+        book = Workbook(); sheet = book.active; sheet.title = "Data"
+        sheet["A1"], sheet["A4"] = values[0], "Header"
+        sheet["A5"], sheet["A6"] = values[1], values[2]
+        book.save(path); book.close()
+    items = [SheetItem(first, "Data", "First"), SheetItem(second, "Data", "Second")]
+    options = MergeOptions(combine_to_one_sheet=True, data_start_row=5, target_sheet_name="Tong_hop")
+
+    result = ExcelMerger().merge(items, output, options)
+
+    book = load_workbook(output)
+    sheet = book["Tong_hop"]
+    assert book.sheetnames == ["Tong_hop"]
+    assert [sheet.cell(row, 1).value for row in range(1, 9)] == [
+        "A1", None, None, "Header", "A5", "A6", "B5", "B6"]
+    assert result.sheet_count == 1
+    book.close()

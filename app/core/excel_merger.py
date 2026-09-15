@@ -63,6 +63,9 @@ class ExcelMerger:
         if output_path.suffix.lower() != ".xlsx":
             output_path = output_path.with_suffix(".xlsx")
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        if options.combine_to_one_sheet:
+            return self._merge_into_one_sheet(
+                selected, output_path, options, started, progress, cancelled)
         used: set[str] = set()
         resolved: list[tuple[SheetItem, str]] = []
         for item in selected:
@@ -122,6 +125,131 @@ class ExcelMerger:
             target.close()
         return MergeResult(output_path, len({item.source_path for item in selected}),
                            copied_count, time.monotonic() - started, warnings)
+
+    def _merge_into_one_sheet(
+        self, selected: list[SheetItem], output_path: Path, options: MergeOptions,
+        started: float, progress: ProgressCallback | None,
+        cancelled: Callable[[], bool] | None,
+    ) -> MergeResult:
+        error = validate_sheet_name(options.target_sheet_name)
+        if error:
+            raise MergeError(f"{options.target_sheet_name}: {error}")
+        if options.data_start_row < 1:
+            raise MergeError("Dòng bắt đầu dữ liệu phải lớn hơn hoặc bằng 1.")
+
+        target = Workbook()
+        destination = target.active
+        destination.title = options.target_sheet_name
+        source_books: dict[tuple[Path, bool], object] = {}
+        warnings: list[str] = []
+        appended_count = 0
+        next_row = 1
+        try:
+            for index, item in enumerate(selected, 1):
+                if cancelled and cancelled():
+                    raise MergeCancelled("Đã hủy quá trình ghép.")
+                key = (item.source_path, options.values_only)
+                if key not in source_books:
+                    try:
+                        source_books[key] = load_workbook(
+                            item.source_path, data_only=options.values_only,
+                            keep_vba=item.source_path.suffix.lower() == ".xlsm", keep_links=True)
+                    except PermissionError as exc:
+                        raise MergeError(f"Không thể đọc {item.source_path.name}. Hãy đóng file trong Excel.") from exc
+                    except Exception as exc:
+                        raise MergeError(f"Không thể đọc {item.source_path.name}: {exc}") from exc
+                source = source_books[key]
+                if item.source_sheet not in source.sheetnames:
+                    raise MergeError(f"Không tìm thấy sheet {item.source_sheet} trong {item.source_path.name}.")
+                sheet = source[item.source_sheet]
+                if options.skip_empty_sheets and self._is_empty(sheet):
+                    warnings.append(f"Đã bỏ qua sheet trống: {item.source_sheet}")
+                    continue
+
+                source_start = 1 if appended_count == 0 else options.data_start_row
+                last_row = self._last_data_row(sheet, source_start)
+                if last_row < source_start:
+                    warnings.append(f"Không có dữ liệu để nối: {item.source_sheet}")
+                else:
+                    self._copy_rows(sheet, destination, source_start, last_row, next_row, options,
+                                    copy_sheet_settings=appended_count == 0)
+                    next_row += last_row - source_start + 1
+                    appended_count += 1
+                if progress:
+                    progress(index, len(selected), item.source_path.name)
+
+            if appended_count == 0:
+                raise MergeError("Không có sheet có dữ liệu để ghi vào file kết quả.")
+            try:
+                target.save(output_path)
+            except PermissionError as exc:
+                raise MergeError("Không thể ghi file kết quả. Hãy đóng file nếu đang mở trong Excel.") from exc
+        finally:
+            for workbook in source_books.values():
+                workbook.close()
+            target.close()
+        return MergeResult(output_path, len({item.source_path for item in selected}),
+                           1, time.monotonic() - started, warnings)
+
+    @staticmethod
+    def _last_data_row(sheet, start_row: int) -> int:
+        for row_number in range(sheet.max_row, start_row - 1, -1):
+            if any(sheet.cell(row_number, column).value is not None
+                   for column in range(1, sheet.max_column + 1)):
+                return row_number
+        return start_row - 1
+
+    def _copy_rows(self, source, target, source_start: int, source_end: int,
+                   target_start: int, options: MergeOptions,
+                   copy_sheet_settings: bool = False) -> None:
+        offset = target_start - source_start
+        for row in source.iter_rows(min_row=source_start, max_row=source_end):
+            for cell in row:
+                if isinstance(cell, MergedCell):
+                    continue
+                new = target.cell(cell.row + offset, cell.column, cell.value)
+                if options.preserve_formatting and cell.has_style:
+                    new.font = copy(cell.font)
+                    new.fill = copy(cell.fill)
+                    new.border = copy(cell.border)
+                    new.alignment = copy(cell.alignment)
+                    new.protection = copy(cell.protection)
+                    new.number_format = cell.number_format
+                if cell.hyperlink:
+                    new._hyperlink = copy(cell.hyperlink)
+                if cell.comment:
+                    new.comment = copy(cell.comment)
+        if options.preserve_formatting:
+            if copy_sheet_settings:
+                for key, dimension in source.column_dimensions.items():
+                    target.column_dimensions[key] = copy(dimension)
+            for index in range(source_start, source_end + 1):
+                if index in source.row_dimensions:
+                    copied = copy(source.row_dimensions[index])
+                    copied.index = index + offset
+                    target.row_dimensions[index + offset] = copied
+            for merged in source.merged_cells.ranges:
+                if merged.min_row >= source_start and merged.max_row <= source_end:
+                    target.merge_cells(start_row=merged.min_row + offset, start_column=merged.min_col,
+                                       end_row=merged.max_row + offset, end_column=merged.max_col)
+        if copy_sheet_settings:
+            target.sheet_format = copy(source.sheet_format)
+            target.sheet_properties = copy(source.sheet_properties)
+            target.page_margins = copy(source.page_margins)
+            target.page_setup = copy(source.page_setup)
+            target.print_options = copy(source.print_options)
+            target.views = copy(source.views)
+            target.freeze_panes = source.freeze_panes
+            target.auto_filter = copy(source.auto_filter)
+            target.print_area = source.print_area
+            target.print_title_cols = source.print_title_cols
+            target.print_title_rows = source.print_title_rows
+            for image in getattr(source, "_images", []):
+                try:
+                    target.add_image(copy(image), copy(image.anchor))
+                except Exception:
+                    logging.getLogger(__name__).warning(
+                        "Could not copy an image from %s", source.title)
 
     @staticmethod
     def _is_empty(sheet) -> bool:

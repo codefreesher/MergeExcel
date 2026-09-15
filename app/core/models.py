@@ -23,6 +23,9 @@ class MergeOptions:
     trim_leading_empty_rows: bool = False
     auto_resolve_duplicates: bool = True
     open_after_merge: bool = True
+    combine_to_one_sheet: bool = False
+    data_start_row: int = 5
+    target_sheet_name: str = "Tong_hop"
 
 
 @dataclass
@@ -32,4 +35,3 @@ class MergeResult:
     sheet_count: int
     elapsed_seconds: float
     warnings: list[str] = field(default_factory=list)
-

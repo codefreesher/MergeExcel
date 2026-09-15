@@ -1,11 +1,12 @@
 # Excel Merger Pro
 
-Ứng dụng desktop PySide6 gom các sheet được chọn từ nhiều workbook vào một file `.xlsx`. Mỗi sheet vẫn là một sheet riêng; dữ liệu không bị nối thành một bảng.
+Ứng dụng desktop PySide6 gom dữ liệu từ các sheet được chọn trong nhiều workbook vào một sheet duy nhất của file `.xlsx`. Phần tiêu đề lấy từ sheet đầu tiên; các sheet tiếp theo nối dữ liệu từ dòng được cấu hình (mặc định là dòng 5).
 
 ## Chức năng
 
 - Kéo thả hoặc chọn nhiều file `.xlsx`, `.xlsm`.
-- Hiển thị mọi sheet, chọn/bỏ chọn, đổi tên và sắp xếp thứ tự.
+- Hiển thị mọi sheet, chọn/bỏ chọn và sắp xếp thứ tự ghép.
+- Chỉ giữ tiêu đề của sheet đầu tiên và nối dữ liệu các sheet sau vào dòng trống kế tiếp.
 - Kiểm tra giới hạn 31 ký tự và ký tự cấm trong tên sheet; tự xử lý tên trùng.
 - Sao chép dữ liệu, công thức hoặc cached value, style, border, alignment, merge cell, kích thước hàng/cột, hàng/cột ẩn, freeze panes, filter, hyperlink, comment, ảnh và thiết lập in ở mức `openpyxl` hỗ trợ.
 - Chạy ghép trên `QThread`, có tiến độ và hủy an toàn giữa các sheet.
