@@ -38,13 +38,24 @@ class Updater:
         try:
             response = requests.get(
                 self.manifest_url,
-                params={"_": int(time.time())},
-                headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
+                params={"per_page": 20, "_": time.time_ns()},
+                headers={
+                    "Accept": "application/vnd.github+json",
+                    "Cache-Control": "no-cache, no-store, max-age=0",
+                    "Pragma": "no-cache",
+                    "User-Agent": "ExcelMergerPro-Updater",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                },
                 timeout=(5, 15),
             )
             response.raise_for_status()
             data = response.json()
-            info = self._parse_github_release(data) if "tag_name" in data else self._parse_manifest(data)
+            if isinstance(data, list):
+                info = self._parse_github_releases(data)
+            elif "tag_name" in data:
+                info = self._parse_github_release(data)
+            else:
+                info = self._parse_manifest(data)
             return info if Version(info.version) > Version(VERSION) else None
         except (requests.RequestException, KeyError, ValueError, InvalidVersion, json.JSONDecodeError) as exc:
             raise UpdateError(f"Không thể kiểm tra cập nhật: {exc}") from exc
@@ -93,6 +104,22 @@ class Updater:
             mandatory="[mandatory]" in body.lower(),
             release_notes=notes[:12],
         )
+
+    def _parse_github_releases(self, releases: list[dict]) -> UpdateInfo:
+        candidates: list[tuple[Version, UpdateInfo]] = []
+        for release in releases:
+            if release.get("draft") or release.get("prerelease"):
+                continue
+            try:
+                info = self._parse_github_release(release)
+                candidates.append((Version(info.version), info))
+            except (UpdateError, KeyError, ValueError, InvalidVersion):
+                # Một release cũ/không đầy đủ không được phép làm hỏng toàn bộ
+                # quá trình kiểm tra cập nhật.
+                continue
+        if not candidates:
+            raise UpdateError("Không tìm thấy bản phát hành hợp lệ có installer.")
+        return max(candidates, key=lambda item: item[0])[1]
 
     def download(self, info: UpdateInfo, progress: Callable[[int], None] | None = None) -> Path:
         if not info.sha256 or len(info.sha256) != 64:

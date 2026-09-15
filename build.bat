@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-set "APP_VERSION=1.2.2"
+set "APP_VERSION=1.3.1"
 
 if not exist ".venv\Scripts\python.exe" (
   py -3 -m venv .venv || exit /b 1
