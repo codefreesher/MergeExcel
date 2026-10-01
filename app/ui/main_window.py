@@ -13,6 +13,7 @@ from app.core.history_manager import HistoryManager
 from app.core.settings_manager import SettingsManager
 from app.core.updater import Updater
 from app.ui.about_page import AboutPage
+from app.ui.code_generator_page import CodeGeneratorPage
 from app.ui.history_page import HistoryPage
 from app.ui.merge_page import MergePage
 from app.ui.settings_page import SettingsPage
@@ -39,9 +40,9 @@ class MainWindow(QMainWindow):
         icon_dir = Path(__file__).parent.parent / "resources" / "icons"
         self.setWindowIcon(QIcon(str(icon_dir / "app-logo.svg")))
         brand_row = QHBoxLayout(); logo = QLabel(); logo.setPixmap(QIcon(str(icon_dir / "app-logo.svg")).pixmap(34, 34)); logo.setFixedSize(36, 36); logo.setAlignment(Qt.AlignmentFlag.AlignCenter); brand_row.addWidget(logo); brand_row.addWidget(QLabel(APP_NAME, objectName="brand")); side.addLayout(brand_row); side.addSpacing(22)
-        self.stack = QStackedWidget(); self.merge_page = MergePage(self.settings); self.history_page = HistoryPage(self.history); self.settings_page = SettingsPage(self.settings); self.about_page = AboutPage()
-        for page in (self.merge_page, self.history_page, self.settings_page, self.about_page): self.stack.addWidget(page)
-        names = [("Ghép Excel", "spreadsheet.svg"), ("Lịch sử", "history.svg"), ("Cài đặt", "settings.svg"), ("Giới thiệu", "info.svg")]
+        self.stack = QStackedWidget(); self.merge_page = MergePage(self.settings); self.code_page = CodeGeneratorPage(); self.history_page = HistoryPage(self.history); self.settings_page = SettingsPage(self.settings); self.about_page = AboutPage()
+        for page in (self.merge_page, self.code_page, self.history_page, self.settings_page, self.about_page): self.stack.addWidget(page)
+        names = [("Ghép Excel", "spreadsheet.svg"), ("Tạo mã QR", "qr-code.svg"), ("Lịch sử", "history.svg"), ("Cài đặt", "settings.svg"), ("Giới thiệu", "info.svg")]
         group = QButtonGroup(self); group.setExclusive(True)
         for index, (name, icon) in enumerate(names):
             button = QPushButton(QIcon(str(icon_dir / icon)), name, objectName="nav"); button.setCheckable(True); button.clicked.connect(lambda _=False, i=index: self.show_page(i)); group.addButton(button); side.addWidget(button)
@@ -50,12 +51,13 @@ class MainWindow(QMainWindow):
         self.update_status = QLabel(""); self.update_status.setWordWrap(True); self.update_status.setStyleSheet("color:#68758a;font-size:11px"); side.addWidget(self.update_status)
         main.addWidget(sidebar); main.addWidget(self.stack, 1); self.toast = Toast(root)
         self.merge_page.toast_requested.connect(self.toast.show_message); self.merge_page.merge_completed.connect(self.merge_finished)
+        self.code_page.toast_requested.connect(self.toast.show_message)
         self.settings_page.check_update_requested.connect(lambda: self.check_updates(True)); self.about_page.check_update_requested.connect(lambda: self.check_updates(True)); self.settings_page.history_clear_requested.connect(self.clear_history)
         if self.settings.get("auto_check_updates", True): self.check_updates(False)
 
     def show_page(self, index: int) -> None:
         self.stack.setCurrentIndex(index)
-        if index == 1: self.history_page.refresh()
+        if index == 2: self.history_page.refresh()
 
     def merge_finished(self, result) -> None:
         self.history.add_success(result); self.history_page.refresh(); self.toast.show_message("Ghép file thành công")

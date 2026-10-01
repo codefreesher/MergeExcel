@@ -3,4 +3,4 @@ openpyxl>=3.1,<4
 requests>=2.32,<3
 packaging>=24,<26
 Pillow>=10,<12
-
+zxing-cpp>=2.3,<4

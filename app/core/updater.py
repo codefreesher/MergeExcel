@@ -155,4 +155,7 @@ class Updater:
     def launch_installer(path: Path) -> None:
         if sys.platform != "win32":
             raise UpdateError("Installer chỉ có thể chạy trên Windows.")
-        subprocess.Popen([str(path), "/SILENT", "/CLOSEAPPLICATIONS"], close_fds=True)
+        subprocess.Popen(
+            [str(path), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CLOSEAPPLICATIONS"],
+            close_fds=True,
+        )
