@@ -1,16 +1,23 @@
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import QRect, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPen, QPixmap
+from PySide6.QtPrintSupport import QPrintDialog, QPrinter
 from PySide6.QtWidgets import (
-    QComboBox, QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel,
-    QLineEdit, QMessageBox, QPushButton, QScrollArea, QSpinBox, QStackedWidget,
-    QTextEdit, QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel,
+    QDialog, QLineEdit, QMessageBox, QPushButton, QScrollArea, QSpinBox,
+    QStackedWidget, QTextEdit, QVBoxLayout, QWidget,
 )
 
-from app.core.code_generator import FORMAT_NAMES, GeneratedCode, generate_code
+from app.core.code_generator import (
+    FORMAT_NAMES,
+    GeneratedCode,
+    generate_code,
+    split_text_items,
+)
 
 
 class CodeGeneratorPage(QWidget):
@@ -21,6 +28,7 @@ class CodeGeneratorPage(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.generated: GeneratedCode | None = None
+        self.generated_codes: list[GeneratedCode] = []
         self.file_path = ""
 
         outer = QVBoxLayout(self)
@@ -101,9 +109,13 @@ class CodeGeneratorPage(QWidget):
         layout.setContentsMargins(0, 4, 0, 0)
         layout.addWidget(QLabel("Văn bản"))
         self.text = QTextEdit()
-        self.text.setPlaceholderText("Nhập nội dung cần mã hóa...")
+        self.text.setPlaceholderText("Nhập danh sách, mỗi nội dung trên một dòng...")
         self.text.setMinimumHeight(150)
         layout.addWidget(self.text)
+        self.batch_lines = QCheckBox("Mỗi dòng tạo một mã riêng")
+        self.batch_lines.setChecked(True)
+        self.batch_lines.setToolTip("Bỏ chọn nếu muốn mã hóa toàn bộ đoạn văn thành một mã duy nhất.")
+        layout.addWidget(self.batch_lines)
         return page
 
     def _wifi_input(self) -> QWidget:
@@ -161,20 +173,33 @@ class CodeGeneratorPage(QWidget):
         box.setContentsMargins(18, 16, 18, 18)
         box.setSpacing(14)
         box.addWidget(QLabel("KẾT QUẢ", objectName="sectionTitle"))
-        self.preview = QLabel("Mã vừa tạo sẽ hiển thị tại đây", objectName="codePreview")
-        self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.preview = QScrollArea(widgetResizable=True, objectName="codePreviewArea")
         self.preview.setMinimumSize(320, 360)
-        self.preview.setWordWrap(True)
+        self.preview_content = QWidget(objectName="codePreviewContent")
+        self.preview_layout = QVBoxLayout(self.preview_content)
+        self.preview_layout.setContentsMargins(14, 14, 14, 14)
+        self.preview_layout.setSpacing(18)
+        self.preview_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.preview.setWidget(self.preview_content)
+        self._show_preview_placeholder()
         box.addWidget(self.preview, 1)
         self.result_info = QLabel("")
         self.result_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.result_info.setObjectName("mutedText")
         box.addWidget(self.result_info)
+        actions = QHBoxLayout()
+        actions.setSpacing(10)
+        self.print_button = QPushButton("IN MÃ...")
+        self.print_button.setMinimumHeight(42)
+        self.print_button.setEnabled(False)
+        self.print_button.clicked.connect(self.print_codes)
+        actions.addWidget(self.print_button)
         self.save_button = QPushButton("LƯU MÃ...")
         self.save_button.setMinimumHeight(42)
         self.save_button.setEnabled(False)
         self.save_button.clicked.connect(self.save_code)
-        box.addWidget(self.save_button)
+        actions.addWidget(self.save_button)
+        box.addLayout(actions)
         return card
 
     def choose_file(self) -> None:
@@ -218,6 +243,12 @@ class CodeGeneratorPage(QWidget):
             ])
         return Path(self.file_path).resolve().as_uri() if self.file_path else ""
 
+    def _payloads(self) -> list[str]:
+        payload = self._payload()
+        if self.content_type.currentText() == "Văn bản" and self.batch_lines.isChecked():
+            return split_text_items(payload)
+        return [payload] if payload else []
+
     @staticmethod
     def _escape_wifi(value: str) -> str:
         for char in "\\;,:":
@@ -225,27 +256,256 @@ class CodeGeneratorPage(QWidget):
         return value
 
     def create_code(self) -> None:
-        payload = self._payload()
-        if not payload:
+        payloads = self._payloads()
+        if not payloads:
             QMessageBox.warning(self, "Thiếu nội dung", "Vui lòng nhập nội dung trước khi tạo mã.")
             return
-        try:
-            self.generated = generate_code(payload, self.code_format.currentText(), self.scale.value())
-        except (ValueError, RuntimeError) as exc:
-            QMessageBox.warning(self, "Không thể tạo mã", str(exc))
-            return
-        pixmap = QPixmap()
-        pixmap.loadFromData(self.generated.png, "PNG")
-        available = QSize(max(100, self.preview.width() - 36), max(100, self.preview.height() - 36))
-        self.preview.setPixmap(pixmap.scaled(available, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-        self.result_info.setText(f"{self.generated.format_name} • {len(payload)} ký tự")
+        generated_codes: list[GeneratedCode] = []
+        for index, payload in enumerate(payloads, start=1):
+            try:
+                generated_codes.append(
+                    generate_code(payload, self.code_format.currentText(), self.scale.value())
+                )
+            except (ValueError, RuntimeError) as exc:
+                prefix = f"Dòng {index}: " if len(payloads) > 1 else ""
+                QMessageBox.warning(self, "Không thể tạo mã", prefix + str(exc))
+                return
+
+        self.generated_codes = generated_codes
+        self.generated = generated_codes[0]
+        self._render_previews()
+        total_characters = sum(len(item.content) for item in generated_codes)
+        if len(generated_codes) == 1:
+            self.result_info.setText(
+                f"{self.generated.format_name} • {total_characters} ký tự"
+            )
+            self.print_button.setText("IN MÃ...")
+            self.save_button.setText("LƯU MÃ...")
+        else:
+            self.result_info.setText(
+                f"{self.generated.format_name} • {len(generated_codes)} mã • "
+                f"{total_characters} ký tự"
+            )
+            self.print_button.setText("IN DANH SÁCH...")
+            self.save_button.setText("LƯU TẤT CẢ...")
+        self.print_button.setEnabled(True)
         self.save_button.setEnabled(True)
-        self.toast_requested.emit("Đã tạo mã thành công")
+        self.toast_requested.emit(f"Đã tạo {len(generated_codes)} mã thành công")
+
+    def _clear_preview(self) -> None:
+        self.preview_content.setMinimumHeight(0)
+        while self.preview_layout.count():
+            item = self.preview_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+    def _show_preview_placeholder(self) -> None:
+        self._clear_preview()
+        placeholder = QLabel("Mã vừa tạo sẽ hiển thị tại đây", objectName="codePreviewPlaceholder")
+        placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        placeholder.setWordWrap(True)
+        placeholder.setMinimumHeight(300)
+        self.preview_layout.addWidget(placeholder)
+
+    def _render_previews(self) -> None:
+        self._clear_preview()
+        for index, generated in enumerate(self.generated_codes, start=1):
+            item = QFrame(objectName="codePreviewItem")
+            item_layout = QVBoxLayout(item)
+            item_layout.setContentsMargins(10, 10, 10, 12)
+            item_layout.setSpacing(8)
+
+            code_label = (
+                "Mã vạch"
+                if generated.format_name in {"Code 128", "EAN-13", "UPC-A"}
+                else "Mã"
+            )
+            title = QLabel(
+                f"{code_label} {index}: ({generated.content})",
+                objectName="codePreviewTitle",
+            )
+            title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            title.setWordWrap(True)
+            title.setTextFormat(Qt.TextFormat.PlainText)
+            title.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            item_layout.addWidget(title)
+
+            pixmap = QPixmap()
+            pixmap.loadFromData(generated.png, "PNG")
+            image = QLabel(objectName="codePreviewImage")
+            image.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            available = QSize(max(180, self.preview.viewport().width() - 70), 280)
+            scaled_pixmap = pixmap.scaled(
+                available,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            image.setPixmap(scaled_pixmap)
+            image.setMinimumHeight(scaled_pixmap.height())
+            item_layout.addWidget(image)
+            self.preview_layout.addWidget(item)
+
+        self.preview_layout.addStretch()
+        self.preview_layout.activate()
+        self.preview_content.setMinimumHeight(self.preview_layout.sizeHint().height())
+        self.preview.verticalScrollBar().setValue(0)
+
+    def print_codes(self) -> None:
+        if not self.generated_codes:
+            return
+        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        printer.setDocName(f"Danh sách {self.generated_codes[0].format_name}")
+        dialog = QPrintDialog(printer, self)
+        dialog.setWindowTitle("In danh sách mã")
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        try:
+            self._render_print_job(printer)
+        except RuntimeError as exc:
+            QMessageBox.critical(self, "Không thể in", str(exc))
+            return
+        self.toast_requested.emit(f"Đã gửi in {len(self.generated_codes)} mã")
+
+    def _render_print_job(self, printer: QPrinter) -> None:
+        """Render the current codes to a printer or PDF output device."""
+        printer.setFullPage(True)
+        painter = QPainter()
+        if not painter.begin(printer):
+            raise RuntimeError("Không thể khởi tạo máy in đã chọn.")
+
+        try:
+            page_rect = printer.pageLayout().paintRectPixels(printer.resolution())
+            if page_rect.width() <= 0 or page_rect.height() <= 0:
+                raise RuntimeError("Khổ giấy hoặc vùng in không hợp lệ.")
+
+            codes_per_page = 4
+            total_pages = (len(self.generated_codes) + codes_per_page - 1) // codes_per_page
+            for page_index in range(total_pages):
+                if page_index and not printer.newPage():
+                    raise RuntimeError("Không thể tạo trang in tiếp theo.")
+                start = page_index * codes_per_page
+                page_codes = self.generated_codes[start:start + codes_per_page]
+                self._paint_code_page(
+                    painter,
+                    page_rect,
+                    page_codes,
+                    start,
+                    page_index + 1,
+                    total_pages,
+                    printer.resolution(),
+                )
+        finally:
+            painter.end()
+
+    @staticmethod
+    def _paint_code_page(
+        painter: QPainter,
+        page_rect: QRect,
+        codes: list[GeneratedCode],
+        start_index: int,
+        page_number: int,
+        total_pages: int,
+        resolution: int,
+    ) -> None:
+        margin = max(12, int(resolution * 0.16))
+        header_height = max(34, int(resolution * 0.34))
+        footer_height = max(24, int(resolution * 0.22))
+        content_rect = page_rect.adjusted(margin, margin, -margin, -margin)
+
+        header = QRect(
+            content_rect.left(), content_rect.top(), content_rect.width(), header_height
+        )
+        heading_font = QFont(painter.font())
+        heading_font.setPointSize(14)
+        heading_font.setBold(True)
+        painter.setFont(heading_font)
+        painter.setPen(QColor("#182135"))
+        format_name = codes[0].format_name if codes else ""
+        painter.drawText(
+            header,
+            Qt.AlignmentFlag.AlignCenter,
+            f"DANH SÁCH {format_name.upper()}",
+        )
+
+        body_top = header.bottom() + margin
+        body_height = content_rect.bottom() - footer_height - body_top
+        gap = max(8, int(resolution * 0.08))
+        slot_height = (body_height - gap * (len(codes) - 1)) // max(1, len(codes))
+        title_font = QFont(painter.font())
+        title_font.setPointSize(11)
+        title_font.setBold(True)
+
+        for offset, generated in enumerate(codes):
+            top = body_top + offset * (slot_height + gap)
+            slot = QRect(content_rect.left(), top, content_rect.width(), slot_height)
+            painter.setPen(QPen(QColor("#d7dee9"), max(1, resolution // 300)))
+            painter.setBrush(QColor("#ffffff"))
+            painter.drawRoundedRect(slot, margin // 3, margin // 3)
+
+            caption_height = max(28, min(slot.height() // 5, int(resolution * 0.48)))
+            caption = slot.adjusted(margin, margin // 2, -margin, 0)
+            caption.setHeight(caption_height)
+            code_label = (
+                "Mã vạch"
+                if generated.format_name in {"Code 128", "EAN-13", "UPC-A"}
+                else "Mã"
+            )
+            painter.setFont(title_font)
+            painter.setPen(QColor("#1769e8"))
+            painter.drawText(
+                caption,
+                Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
+                f"{code_label} {start_index + offset + 1}: ({generated.content})",
+            )
+
+            image = QImage.fromData(generated.png, "PNG")
+            if image.isNull():
+                continue
+            image_area = slot.adjusted(
+                margin,
+                caption_height + margin,
+                -margin,
+                -margin,
+            )
+            target_size = image.size().scaled(
+                image_area.size(), Qt.AspectRatioMode.KeepAspectRatio
+            )
+            target = QRect(
+                image_area.center().x() - target_size.width() // 2,
+                image_area.center().y() - target_size.height() // 2,
+                target_size.width(),
+                target_size.height(),
+            )
+            painter.drawImage(target, image)
+
+        footer = QRect(
+            content_rect.left(),
+            content_rect.bottom() - footer_height,
+            content_rect.width(),
+            footer_height,
+        )
+        footer_font = QFont(painter.font())
+        footer_font.setPointSize(9)
+        footer_font.setBold(False)
+        painter.setFont(footer_font)
+        painter.setPen(QColor("#68758a"))
+        painter.drawText(
+            footer,
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+            f"Trang {page_number}/{total_pages}",
+        )
 
     def save_code(self) -> None:
-        if self.generated is None:
+        if not self.generated_codes:
             return
-        suggested = f"ma-{self.generated.format_name.lower().replace(' ', '-')}.png"
+        if len(self.generated_codes) > 1:
+            self._save_code_batch()
+            return
+        self._save_single_code(self.generated_codes[0])
+
+    def _save_single_code(self, generated: GeneratedCode) -> None:
+        suggested = f"ma-{generated.format_name.lower().replace(' ', '-')}.png"
         path, selected = QFileDialog.getSaveFileName(
             self, "Lưu mã", suggested, "Ảnh PNG (*.png);;Ảnh JPEG (*.jpg *.jpeg);;Vector SVG (*.svg)"
         )
@@ -261,15 +521,38 @@ class CodeGeneratorPage(QWidget):
             target = target.with_suffix(".png")
         try:
             if target.suffix.lower() == ".svg":
-                target.write_text(self.generated.svg, encoding="utf-8")
+                target.write_text(generated.svg, encoding="utf-8")
             elif target.suffix.lower() in {".jpg", ".jpeg"}:
                 from io import BytesIO
                 from PIL import Image
-                image = Image.open(BytesIO(self.generated.png)).convert("RGB")
+                image = Image.open(BytesIO(generated.png)).convert("RGB")
                 image.save(target, format="JPEG", quality=95)
             else:
-                target.write_bytes(self.generated.png)
+                target.write_bytes(generated.png)
         except OSError as exc:
             QMessageBox.critical(self, "Không thể lưu", f"Không thể lưu file:\n{exc}")
             return
         self.toast_requested.emit(f"Đã lưu mã: {target.name}")
+
+    def _save_code_batch(self) -> None:
+        parent = QFileDialog.getExistingDirectory(self, "Chọn thư mục lưu danh sách mã")
+        if not parent:
+            return
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        output_dir = Path(parent) / f"danh-sach-ma-{stamp}"
+        counter = 2
+        while output_dir.exists():
+            output_dir = Path(parent) / f"danh-sach-ma-{stamp}-{counter}"
+            counter += 1
+        try:
+            output_dir.mkdir(parents=True)
+            digits = max(3, len(str(len(self.generated_codes))))
+            for index, generated in enumerate(self.generated_codes, start=1):
+                filename = f"ma-{index:0{digits}d}.png"
+                (output_dir / filename).write_bytes(generated.png)
+        except OSError as exc:
+            QMessageBox.critical(self, "Không thể lưu", f"Không thể lưu danh sách mã:\n{exc}")
+            return
+        self.toast_requested.emit(
+            f"Đã lưu {len(self.generated_codes)} mã vào: {output_dir.name}"
+        )

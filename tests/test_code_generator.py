@@ -5,7 +5,7 @@ from io import BytesIO
 from PIL import Image
 import pytest
 
-from app.core.code_generator import FORMAT_NAMES, generate_code
+from app.core.code_generator import FORMAT_NAMES, generate_code, split_text_items
 
 
 @pytest.mark.parametrize("format_name,content", [
@@ -37,3 +37,9 @@ def test_all_formats_have_backend_names() -> None:
     assert set(FORMAT_NAMES) == {
         "QR Code", "Data Matrix", "Aztec", "PDF417", "Code 128", "EAN-13", "UPC-A"
     }
+
+
+def test_split_text_items_ignores_blank_lines_and_whitespace() -> None:
+    assert split_text_items("  ma mot  \n\n ma hai\r\n   \nma ba ") == [
+        "ma mot", "ma hai", "ma ba"
+    ]

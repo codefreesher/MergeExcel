@@ -22,6 +22,12 @@ QLabel#stepBadge { min-width: 22px; max-width: 22px; min-height: 22px; max-heigh
 QLabel#mutedText { color: #68758a; }
 QLabel#hintText { color: #68758a; font-size: 12px; }
 QLabel#codePreview { background: #f8fafc; color: #8491a5; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 18px; }
+QScrollArea#codePreviewArea { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; }
+QScrollArea#codePreviewArea > QWidget > QWidget, QWidget#codePreviewContent { background: #f8fafc; }
+QLabel#codePreviewPlaceholder { color: #8491a5; background: transparent; }
+QFrame#codePreviewItem { background: #ffffff; border: 1px solid #e1e7ef; border-radius: 7px; }
+QLabel#codePreviewTitle { color: #1769e8; font-weight: 700; background: transparent; border: 0; }
+QLabel#codePreviewImage { background: #ffffff; border: 0; }
 QLineEdit, QTextEdit, QComboBox, QSpinBox { border: 1px solid #ccd3df; border-radius: 6px; padding: 8px; background: white; }
 QLineEdit:focus, QTextEdit:focus, QComboBox:focus, QSpinBox:focus { border-color: #246bfd; }
 QTableWidget { background-color: white; alternate-background-color: #fbfcfe; border: 1px solid #e1e6ee; border-radius: 7px; gridline-color: #edf0f5; selection-background-color: #eaf2ff; selection-color: #172033; }

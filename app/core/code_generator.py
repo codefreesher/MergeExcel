@@ -25,6 +25,11 @@ class GeneratedCode:
     content: str
 
 
+def split_text_items(content: str) -> list[str]:
+    """Return non-empty, trimmed lines for batch code generation."""
+    return [line.strip() for line in content.splitlines() if line.strip()]
+
+
 def generate_code(content: str, format_name: str, scale: int = 6) -> GeneratedCode:
     """Generate a scannable code as both PNG and SVG."""
     if not content.strip():

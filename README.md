@@ -13,6 +13,7 @@
 - Lịch sử SQLite, settings JSON và rotating log nằm ngoài thư mục cài đặt.
 - Kiểm tra update nền, download installer và bắt buộc xác minh SHA-256 trước khi chạy.
 - Giao diện bốn trang theo phong cách Windows 11, icon SVG, shortcut bàn phím và menu chuột phải.
+- Tạo QR/mã vạch hàng loạt từ danh sách, mỗi dòng là một mã, xem trước, in và lưu toàn bộ thành các ảnh PNG.
 
 ## Chạy từ source
 
